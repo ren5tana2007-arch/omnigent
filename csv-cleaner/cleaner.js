@@ -206,7 +206,10 @@
    * Run the cleaning pipeline.
    * settings: {normalize, placeholdersAsBlank, removeEmptyRows, requiredColumns,
    *            variantRules: {[column]: {[value]: representative}},
-   *            removeDuplicates, duplicateKeyColumns}
+   *            removeDuplicates, duplicateKeyColumns,
+   *            manualEdits: {["origin:column"]: value}, pendingRows: [origin]}
+   * Manual edits replace the source value before cleaning; pending rows (just added
+   * by the user) are kept while still completely blank.
    * Row numbers in the result are spreadsheet rows (header = row 1).
    */
   function cleanTable(table, settings) {
@@ -219,23 +222,29 @@
         variantRules: {},
         removeDuplicates: true,
         duplicateKeyColumns: [],
+        manualEdits: {},
+        pendingRows: [],
       },
       settings,
     );
     const columnCount = table.headers.length;
     const changes = [];
+    const pendingRows = new Set(options.pendingRows);
     const working = table.rows.map((original, originIndex) => {
       const cells = original.map((before, column) => {
-        let after = options.normalize ? normalizeText(before, options.normalize) : before;
-        let kind = "normalize";
+        const editKey = `${originIndex}:${column}`;
+        const edited = Object.prototype.hasOwnProperty.call(options.manualEdits, editKey);
+        const source = edited ? String(options.manualEdits[editKey]) : before;
+        let after = options.normalize ? normalizeText(source, options.normalize) : source;
+        let kind = edited ? "manual" : "normalize";
         if (options.placeholdersAsBlank && after !== "" && isPlaceholderBlank(after)) {
           after = "";
-          kind = "blank";
+          if (!edited) kind = "blank";
         }
         const rule = options.variantRules[column];
         if (rule && Object.prototype.hasOwnProperty.call(rule, after) && rule[after] !== after) {
           after = rule[after];
-          kind = "variant";
+          if (!edited) kind = "variant";
         }
         if (after !== before) changes.push({ origin: originIndex, column, before, after, kind });
         return after;
@@ -247,6 +256,10 @@
     const survivors = [];
     for (const row of working) {
       const blankFlags = row.cells.map((cell) => cell.trim() === "");
+      if (pendingRows.has(row.origin) && blankFlags.every(Boolean)) {
+        survivors.push(row);
+        continue;
+      }
       if (options.removeEmptyRows && blankFlags.every(Boolean)) {
         removed.push({ origin: row.origin, cells: row.cells, reason: "空行", type: "empty" });
         continue;
@@ -267,6 +280,10 @@
         : [...Array(columnCount).keys()];
       const firstSeen = new Map();
       for (const row of survivors) {
+        if (pendingRows.has(row.origin) && row.cells.every((cell) => cell.trim() === "")) {
+          kept.push(row);
+          continue;
+        }
         const signature = duplicateSignature(row.cells, keyColumns);
         if (firstSeen.has(signature)) {
           const firstRowNumber = firstSeen.get(signature) + 2;
@@ -293,6 +310,25 @@
       changes: changes.filter((change) => keptOrigins.has(change.origin)),
       removed,
     };
+  }
+
+  /** Parse pasted or typed text (CSV, or tab-separated as copied from Excel) into a table. */
+  function parseText(text) {
+    const body = text.charCodeAt(0) === 0xfeff ? text.slice(1) : text;
+    return buildTable(parseCSV(body, detectDelimiter(body)));
+  }
+
+  /** True when most non-blank values in the column are numbers (commas allowed). */
+  function isNumericColumn(rows, column) {
+    let numeric = 0;
+    let filled = 0;
+    for (const row of rows) {
+      const value = normalizeText(row[column]).replace(/,/g, "");
+      if (value === "") continue;
+      filled += 1;
+      if (/^[-+]?\d+(\.\d+)?$/.test(value)) numeric += 1;
+    }
+    return filled > 0 && numeric / filled >= 0.8;
   }
 
   /** Count blank cells per column. */
@@ -328,6 +364,8 @@
     detectDelimiter,
     parseCSV,
     buildTable,
+    parseText,
+    isNumericColumn,
     normalizeText,
     normalizeAll,
     isBlank,

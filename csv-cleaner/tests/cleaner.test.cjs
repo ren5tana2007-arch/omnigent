@@ -95,6 +95,28 @@ test("cleanTable compares duplicates only on the chosen key columns", () => {
   assert.equal(byAll.table.rows.length, 2);
 });
 
+test("cleanTable applies manual edits before cleaning and keeps blank pending rows", () => {
+  const table = { headers: ["item", "price"], rows: [["pen", "100"], ["", ""]] };
+  const result = cleaner.cleanTable(table, {
+    manualEdits: { "0:1": "１２０" },
+    pendingRows: [1],
+  });
+  assert.deepEqual(result.table.rows, [["pen", "120"], ["", ""]]);
+  assert.deepEqual(result.changes, [{ origin: 0, column: 1, before: "100", after: "120", kind: "manual" }]);
+  assert.equal(cleaner.cleanTable(table, {}).table.rows.length, 1);
+});
+
+test("parseText reads tab-separated text pasted from Excel", () => {
+  const table = cleaner.parseText("品名\t数量\nりんご\t3\n");
+  assert.deepEqual(table, { headers: ["品名", "数量"], rows: [["りんご", "3"]] });
+});
+
+test("isNumericColumn detects mostly numeric columns", () => {
+  const rows = [["1,200"], ["３００"], [""], ["-5.5"]];
+  assert.equal(cleaner.isNumericColumn(rows, 0), true);
+  assert.equal(cleaner.isNumericColumn([["abc"], ["1"]], 0), false);
+});
+
 test("toCSV quotes fields that need it and toSheetValue keeps leading zeros", () => {
   assert.equal(cleaner.toCSV(["a", "b"], [['x,y', 'say "hi"']]), 'a,b\r\n"x,y","say ""hi"""\r\n');
   assert.equal(cleaner.toSheetValue("0123"), "0123");

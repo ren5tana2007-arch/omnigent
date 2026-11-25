@@ -41,6 +41,16 @@
         </label>
         <p class="muted drop-hint">CSV・TSV・Excel（.xlsx / .xls）をここにドロップできます</p>
         <p id="load-error" class="error" role="alert" hidden></p>
+        <details class="paste-panel">
+          <summary>貼り付け・直接入力で始める</summary>
+          <label class="field-note" for="paste-input">
+            Excelでコピーした範囲を貼り付けるか、1行目に見出しを入れてカンマ区切りで入力します。見出しだけ入れて「行を追加」で1件ずつ入力することもできます。
+          </label>
+          <textarea id="paste-input" rows="5" placeholder="品名,数量,単価&#10;りんご,3,120"></textarea>
+          <div class="paste-actions">
+            <button id="paste-apply" class="button primary" type="button">この内容で整理</button>
+          </div>
+        </details>
       </section>
 
       <section class="summary" aria-label="整理結果のまとめ">
@@ -99,7 +109,14 @@
               <button class="tab" role="tab" data-view="changes" aria-selected="false">変更履歴 <span id="count-changes" class="count">0</span></button>
               <button class="tab" role="tab" data-view="removed" aria-selected="false">削除した行 <span id="count-removed" class="count">0</span></button>
             </div>
-            <div class="legend" id="legend"></div>
+            <div class="table-toolbar">
+              <div class="legend" id="legend"></div>
+              <div class="toolbar-actions">
+                <button id="clear-edits" class="button small" type="button" hidden>手入力を取り消す</button>
+                <button id="add-row" class="button small" type="button">行を追加</button>
+              </div>
+            </div>
+            <p class="field-note edit-hint">セルをタップすると値を直接入力できます。数値の列では数字キーボードが出ます。</p>
             <div class="table-scroll" id="table-container"></div>
             <p id="table-note" class="muted"></p>
           </section>

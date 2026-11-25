@@ -1,0 +1,123 @@
+<!doctype html>
+<html lang="ja">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <title>ととのえ表</title>
+    <meta name="claude:viewport-fit-sides" content="cover" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      rel="stylesheet"
+      href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;600&family=Zen+Kaku+Gothic+New:wght@500;700&display=swap"
+    />
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <div class="page">
+      <header class="masthead">
+        <div>
+          <h1>ととのえ表</h1>
+          <p class="lede">
+            CSV・Excelの重複、空欄、表記揺れをまとめて整理します。データはこのブラウザの中だけで処理し、外部には送信しません。
+          </p>
+        </div>
+        <div class="file-actions">
+          <label class="button primary" for="file-input">ファイルを選ぶ</label>
+          <input id="file-input" type="file" accept=".csv,.tsv,.txt,.xlsx,.xls" hidden />
+          <button id="load-sample" class="button" type="button">サンプルに戻す</button>
+        </div>
+      </header>
+
+      <section id="drop-zone" class="drop-zone" aria-label="ファイルのドロップ先">
+        <div class="file-meta">
+          <span id="source-badge" class="badge sample">サンプル</span>
+          <strong id="file-name">sample.csv</strong>
+          <span id="file-detail" class="muted"></span>
+        </div>
+        <label id="sheet-picker" class="sheet-picker" hidden>
+          シート
+          <select id="sheet-select"></select>
+        </label>
+        <p class="muted drop-hint">CSV・TSV・Excel（.xlsx / .xls）をここにドロップできます</p>
+        <p id="load-error" class="error" role="alert" hidden></p>
+      </section>
+
+      <section class="summary" aria-label="整理結果のまとめ">
+        <div class="stat"><span class="stat-label">元の行数</span><span id="stat-before" class="stat-value">0</span></div>
+        <div class="stat"><span class="stat-label">整理後の行数</span><span id="stat-after" class="stat-value">0</span></div>
+        <div class="stat warn"><span class="stat-label">重複で削除</span><span id="stat-duplicates" class="stat-value">0</span></div>
+        <div class="stat warn"><span class="stat-label">空欄で削除</span><span id="stat-blank-rows" class="stat-value">0</span></div>
+        <div class="stat mark"><span class="stat-label">修正したセル</span><span id="stat-changes" class="stat-value">0</span></div>
+        <div class="stat"><span class="stat-label">空欄セル（整理前）</span><span id="stat-blank-cells" class="stat-value">0</span></div>
+      </section>
+
+      <div class="workspace">
+        <aside class="settings" aria-label="整理の設定">
+          <fieldset>
+            <legend>表記の正規化</legend>
+            <label class="check"><input id="opt-width" type="checkbox" checked /> 全角英数字→半角、半角カナ→全角</label>
+            <label class="check"><input id="opt-trim" type="checkbox" checked /> 前後の空白を削除</label>
+            <label class="check"><input id="opt-spaces" type="checkbox" checked /> 連続した空白を1つに</label>
+            <label class="check"><input id="opt-dashes" type="checkbox" checked /> ハイフン類を「-」に統一</label>
+          </fieldset>
+
+          <fieldset>
+            <legend>空欄</legend>
+            <label class="check"><input id="opt-placeholders" type="checkbox" checked /> 「-」「N/A」「NULL」も空欄とみなす</label>
+            <label class="check"><input id="opt-empty-rows" type="checkbox" checked /> すべて空欄の行を削除</label>
+            <p class="field-note">空欄なら行ごと削除する列（必須列）</p>
+            <div id="required-columns" class="chips"></div>
+          </fieldset>
+
+          <fieldset>
+            <legend>重複</legend>
+            <label class="check"><input id="opt-duplicates" type="checkbox" checked /> 重複行を削除（最初の行を残す）</label>
+            <p class="field-note">判定に使う列（未選択ならすべての列）</p>
+            <div id="duplicate-columns" class="chips"></div>
+          </fieldset>
+
+          <fieldset>
+            <legend>表記揺れ</legend>
+            <p class="field-note">
+              大文字小文字・空白・（株）などの違いだけで同じと思われる値です。チェックした組は「統一先」に揃えます。
+            </p>
+            <div id="variant-groups" class="variant-groups"></div>
+          </fieldset>
+        </aside>
+
+        <main class="results">
+          <section class="blank-chart" aria-label="列ごとの空欄率">
+            <h2>列ごとの空欄（整理前）</h2>
+            <div id="blank-bars" class="blank-bars"></div>
+          </section>
+
+          <section class="compare">
+            <div class="tabs" role="tablist">
+              <button class="tab" role="tab" data-view="after" aria-selected="true">整理後</button>
+              <button class="tab" role="tab" data-view="before" aria-selected="false">整理前</button>
+              <button class="tab" role="tab" data-view="changes" aria-selected="false">変更履歴 <span id="count-changes" class="count">0</span></button>
+              <button class="tab" role="tab" data-view="removed" aria-selected="false">削除した行 <span id="count-removed" class="count">0</span></button>
+            </div>
+            <div class="legend" id="legend"></div>
+            <div class="table-scroll" id="table-container"></div>
+            <p id="table-note" class="muted"></p>
+          </section>
+
+          <section class="downloads">
+            <h2>ダウンロード</h2>
+            <div class="download-buttons">
+              <button id="download-csv" class="button primary" type="button">CSV（Excel対応）</button>
+              <button id="download-xlsx" class="button" type="button">Excel（変更履歴つき）</button>
+            </div>
+            <p id="download-status" class="muted" role="status"></p>
+          </section>
+        </main>
+      </div>
+    </div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <script src="cleaner.js"></script>
+    <script src="app.js"></script>
+  </body>
+</html>
